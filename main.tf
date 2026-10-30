@@ -65,6 +65,21 @@ resource "alicloud_express_connect_physical_connection" "this" {
   }
 }
 
+# Manage Physical Connection tags in Terraform state
+resource "terraform_data" "physical_connection_tags" {
+  count = local.has_physical_connection && length(var.tags) > 0 ? 1 : 0
+
+  triggers_replace = [
+    local.physical_connection_id,
+    jsonencode(var.tags),
+  ]
+
+  input = {
+    physical_connection_id = local.physical_connection_id
+    tags                   = var.tags
+  }
+}
+
 # Create Virtual Physical Connections (Hosted Connections / Shared Ports)
 resource "alicloud_express_connect_virtual_physical_connection" "vpconn" {
   for_each = local.should_create_vpconn ? var.virtual_physical_connections : {}

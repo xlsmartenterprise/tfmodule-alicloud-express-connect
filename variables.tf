@@ -95,6 +95,12 @@ variable "resource_group_id" {
   default     = null
 }
 
+variable "tags" {
+  description = "Map of tags to assign to the Express Connect physical connection."
+  type        = map(string)
+  default     = {}
+}
+
 # Virtual Physical Connections (Shared Ports / Hosted Connections)
 variable "virtual_physical_connections" {
   description = "Map of Virtual Physical Connections (shared ports) to create on the physical connection."

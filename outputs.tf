@@ -13,6 +13,11 @@ output "physical_connection" {
   value       = var.create_physical_connection ? alicloud_express_connect_physical_connection.this[0] : null
 }
 
+output "physical_connection_tags" {
+  description = "Tags assigned to the Express Connect physical connection."
+  value       = var.tags
+}
+
 output "virtual_physical_connection_ids" {
   description = "Map of Virtual Physical Connection keys to their IDs."
   value = {
