@@ -65,11 +65,13 @@ resource "alicloud_express_connect_physical_connection" "this" {
   }
 }
 
+data "alicloud_account" "current" {}
+
 data "alicloud_regions" "current" {
   current = true
 }
 
-# Manage Physical Connection tags in Alibaba Cloud via vpc:TagResources
+# Manage Physical Connection tags in Alibaba Cloud via tag:TagResources
 resource "terraform_data" "physical_connection_tags" {
   count = local.has_physical_connection && length(var.tags) > 0 ? 1 : 0
 
@@ -90,23 +92,27 @@ resource "terraform_data" "physical_connection_tags" {
       import json, os, subprocess, sys
       tags = json.loads(os.environ["TF_PC_TAGS"])
       region = os.environ["TF_PC_REGION"]
+      account_id = os.environ["TF_PC_ACCOUNT"]
       pc_id = os.environ["TF_PC_ID"]
       profile = os.environ.get("ALICLOUD_PROFILE", "")
-      cmd = ["aliyun", "vpc", "TagResources", "--region", region, "--RegionId", region, "--ResourceType", "PHYSICALCONNECTION", "--ResourceId.1", pc_id]
-      if profile:
-          cmd.extend(["--profile", profile])
-      for idx, (k, v) in enumerate(sorted(tags.items()), 1):
-          cmd.extend([f"--Tag.{idx}.Key", str(k), f"--Tag.{idx}.Value", str(v)])
-      res = subprocess.run(cmd, capture_output=True, text=True)
-      if res.returncode != 0:
-          sys.stderr.write(res.stderr or res.stdout)
-          sys.exit(res.returncode)
+      arn = f"acs:vpc:{region}:{account_id}:physicalconnection/{pc_id}"
+      items = sorted(tags.items())
+      for i in range(0, len(items), 10):
+          chunk = dict(items[i:i+10])
+          cmd = ["aliyun", "tag", "TagResources", "--region", region, "--RegionId", region, "--ResourceARN.1", arn, "--Tags", json.dumps(chunk)]
+          if profile:
+              cmd.extend(["--profile", profile])
+          res = subprocess.run(cmd, capture_output=True, text=True)
+          if res.returncode != 0:
+              sys.stderr.write(res.stderr or res.stdout)
+              sys.exit(res.returncode)
       '
     EOT
     environment = {
-      TF_PC_ID     = local.physical_connection_id
-      TF_PC_REGION = data.alicloud_regions.current.regions[0].id
-      TF_PC_TAGS   = jsonencode(var.tags)
+      TF_PC_ID      = local.physical_connection_id
+      TF_PC_REGION  = data.alicloud_regions.current.regions[0].id
+      TF_PC_ACCOUNT = data.alicloud_account.current.id
+      TF_PC_TAGS    = jsonencode(var.tags)
     }
   }
 }
