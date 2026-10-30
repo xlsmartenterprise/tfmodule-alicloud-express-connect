@@ -65,7 +65,11 @@ resource "alicloud_express_connect_physical_connection" "this" {
   }
 }
 
-# Manage Physical Connection tags in Terraform state
+data "alicloud_regions" "current" {
+  current = true
+}
+
+# Manage Physical Connection tags in Alibaba Cloud via vpc:TagResources
 resource "terraform_data" "physical_connection_tags" {
   count = local.has_physical_connection && length(var.tags) > 0 ? 1 : 0
 
@@ -76,7 +80,34 @@ resource "terraform_data" "physical_connection_tags" {
 
   input = {
     physical_connection_id = local.physical_connection_id
+    region_id              = data.alicloud_regions.current.regions[0].id
     tags                   = var.tags
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      python3 -c '
+      import json, os, subprocess, sys
+      tags = json.loads(os.environ["TF_PC_TAGS"])
+      region = os.environ["TF_PC_REGION"]
+      pc_id = os.environ["TF_PC_ID"]
+      profile = os.environ.get("ALICLOUD_PROFILE", "")
+      cmd = ["aliyun", "vpc", "TagResources", "--region", region, "--RegionId", region, "--ResourceType", "PHYSICALCONNECTION", "--ResourceId.1", pc_id]
+      if profile:
+          cmd.extend(["--profile", profile])
+      for idx, (k, v) in enumerate(sorted(tags.items()), 1):
+          cmd.extend([f"--Tag.{idx}.Key", str(k), f"--Tag.{idx}.Value", str(v)])
+      res = subprocess.run(cmd, capture_output=True, text=True)
+      if res.returncode != 0:
+          sys.stderr.write(res.stderr or res.stdout)
+          sys.exit(res.returncode)
+      '
+    EOT
+    environment = {
+      TF_PC_ID     = local.physical_connection_id
+      TF_PC_REGION = data.alicloud_regions.current.regions[0].id
+      TF_PC_TAGS   = jsonencode(var.tags)
+    }
   }
 }
 
